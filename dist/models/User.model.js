@@ -68,7 +68,7 @@ const UserSchema = new mongoose_1.Schema({
     },
     userType: {
         type: String,
-        enum: ['buyer', 'farmer'],
+        enum: ['buyer', 'farmer', 'admin'],
         required: [true, 'Please select user type'],
     },
     phoneNumber: {
@@ -79,6 +79,10 @@ const UserSchema = new mongoose_1.Schema({
         default: [],
     },
     isVerified: {
+        type: Boolean,
+        default: false,
+    },
+    isBanned: {
         type: Boolean,
         default: false,
     },

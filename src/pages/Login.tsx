@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { adminApi } from "@/services/adminApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,22 +20,10 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      // Check if user has admin role
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", data.user.id)
-        .single();
-
-      if (roleData?.role !== "admin") {
-        await supabase.auth.signOut();
+      const data = await adminApi.login(email, password);
+      
+      if (data.user.userType !== 'admin') {
+        adminApi.logout();
         toast.error("Access denied. Admin privileges required.");
         return;
       }

@@ -13,7 +13,7 @@ const registerValidation = [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),
     (0, express_validator_1.body)('password').isLength({ min: 6 }),
     (0, express_validator_1.body)('displayName').trim().notEmpty(),
-    (0, express_validator_1.body)('userType').isIn(['buyer', 'farmer']),
+    (0, express_validator_1.body)('userType').isIn(['buyer', 'farmer', 'admin']),
 ];
 const loginValidation = [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),

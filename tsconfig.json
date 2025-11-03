@@ -21,6 +21,18 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests",
+    "src/pages/**/*",
+    "src/components/**/*",
+    "src/services/adminApi.ts",
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/index.tsx",
+    "src/vite-env.d.ts",
+    "src/hooks/**/*"
+  ]
 }
 

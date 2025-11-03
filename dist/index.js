@@ -21,6 +21,7 @@ const order_routes_1 = __importDefault(require("./routes/order.routes"));
 const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const review_routes_1 = __importDefault(require("./routes/review.routes"));
 const message_routes_1 = __importDefault(require("./routes/message.routes"));
+const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const app = (0, express_1.default)();
 // Connect to database
 (0, database_1.default)();
@@ -67,6 +68,7 @@ app.use('/api/v1/orders', order_routes_1.default);
 app.use('/api/v1/payments', payment_routes_1.default);
 app.use('/api/v1/reviews', review_routes_1.default);
 app.use('/api/v1/messages', message_routes_1.default);
+app.use('/api/v1/admin', admin_routes_1.default);
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({

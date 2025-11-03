@@ -1,7 +1,7 @@
 export interface TokenPayload {
     userId: string;
     email: string;
-    userType: 'buyer' | 'farmer';
+    userType: 'buyer' | 'farmer' | 'admin';
 }
 export declare const generateToken: (payload: TokenPayload) => string;
 export declare const verifyToken: (token: string) => TokenPayload;

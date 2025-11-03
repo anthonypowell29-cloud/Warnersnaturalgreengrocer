@@ -17,7 +17,7 @@ const registerValidation = [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
   body('displayName').trim().notEmpty(),
-  body('userType').isIn(['buyer', 'farmer']),
+  body('userType').isIn(['buyer', 'farmer', 'admin']),
 ];
 
 const loginValidation = [

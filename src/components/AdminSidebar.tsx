@@ -23,7 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { adminApi } from "@/services/adminApi";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -40,8 +40,8 @@ export function AdminSidebar() {
   const { open } = useSidebar();
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    adminApi.logout();
     toast.success("Logged out successfully");
     navigate("/login");
   };

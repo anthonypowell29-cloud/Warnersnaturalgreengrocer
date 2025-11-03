@@ -4,7 +4,7 @@ export interface IUser extends Document {
     password: string;
     displayName: string;
     photoURL?: string;
-    userType: 'buyer' | 'farmer';
+    userType: 'buyer' | 'farmer' | 'admin';
     phoneNumber?: string;
     addresses: {
         street: string;
@@ -14,6 +14,7 @@ export interface IUser extends Document {
         isDefault: boolean;
     }[];
     isVerified: boolean;
+    isBanned?: boolean;
     verificationToken?: string;
     resetPasswordToken?: string;
     resetPasswordExpires?: Date;

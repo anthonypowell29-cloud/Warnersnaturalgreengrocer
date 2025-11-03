@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { adminApi } from "@/services/adminApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Package, Star, DollarSign, TrendingUp, ShoppingCart } from "lucide-react";
 import StMaryMap from "@/components/StMaryMap";
 import jamaicaPattern from "@/assets/jamaica-produce-pattern.jpg";
+import { useNavigate } from "react-router-dom";
 
 interface Stats {
   totalUsers: number;
@@ -33,30 +34,21 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
+  const navigate = useNavigate();
+
   const fetchStats = async () => {
     try {
-      const [users, products, reviews, transactions, payouts] = await Promise.all([
-        supabase.from("users").select("*", { count: "exact", head: true }),
-        supabase.from("products").select("*", { count: "exact" }),
-        supabase.from("reviews").select("*", { count: "exact" }),
-        supabase.from("transactions").select("total_amount"),
-        supabase.from("payouts").select("*", { count: "exact" }),
-      ]);
-
-      const totalRevenue = transactions.data?.reduce((sum, t) => sum + Number(t.total_amount), 0) || 0;
-      const pendingProducts = products.data?.filter(p => p.status === "pending").length || 0;
-      const pendingReviews = reviews.data?.filter(r => r.status === "pending").length || 0;
-      const pendingPayouts = payouts.data?.filter((p: any) => p.status === "pending").length || 0;
+      const data = await adminApi.getStats();
 
       setStats({
-        totalUsers: users.count || 0,
-        totalProducts: products.count || 0,
-        pendingProducts,
-        totalReviews: reviews.count || 0,
-        pendingReviews,
-        totalTransactions: transactions.data?.length || 0,
-        totalRevenue,
-        pendingPayouts,
+        totalUsers: data.users.total,
+        totalProducts: data.products.total,
+        pendingProducts: data.products.pending,
+        totalReviews: data.reviews.total,
+        pendingReviews: data.reviews.pending,
+        totalTransactions: data.transactions.total,
+        totalRevenue: data.transactions.revenue,
+        pendingPayouts: 0, // Will be calculated from payouts endpoint
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -182,25 +174,37 @@ const Dashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button className="p-4 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-left">
+            <button 
+              onClick={() => navigate("/dashboard/products")}
+              className="p-4 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-left"
+            >
               <h3 className="font-semibold text-foreground">Review Products</h3>
               <p className="text-sm text-muted-foreground mt-1">
                 {stats.pendingProducts} pending approval
               </p>
             </button>
-            <button className="p-4 rounded-lg border border-secondary/20 hover:bg-secondary/5 transition-colors text-left">
+            <button 
+              onClick={() => navigate("/dashboard/reviews")}
+              className="p-4 rounded-lg border border-secondary/20 hover:bg-secondary/5 transition-colors text-left"
+            >
               <h3 className="font-semibold text-foreground">Moderate Reviews</h3>
               <p className="text-sm text-muted-foreground mt-1">
                 {stats.pendingReviews} pending moderation
               </p>
             </button>
-            <button className="p-4 rounded-lg border border-accent/20 hover:bg-accent/5 transition-colors text-left">
+            <button 
+              onClick={() => navigate("/dashboard/payouts")}
+              className="p-4 rounded-lg border border-accent/20 hover:bg-accent/5 transition-colors text-left"
+            >
               <h3 className="font-semibold text-foreground">Process Payouts</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                {stats.pendingPayouts} pending payouts
+                View farmer payouts
               </p>
             </button>
-            <button className="p-4 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-left">
+            <button 
+              onClick={() => navigate("/dashboard/users")}
+              className="p-4 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-left"
+            >
               <h3 className="font-semibold text-foreground">User Management</h3>
               <p className="text-sm text-muted-foreground mt-1">
                 Manage {stats.totalUsers} users

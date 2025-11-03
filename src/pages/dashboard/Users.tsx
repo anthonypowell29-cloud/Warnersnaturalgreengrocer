@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { adminApi } from "@/services/adminApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Ban, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import jamaicaPattern from "@/assets/jamaica-produce-pattern.jpg";
 
 interface User {
-  id: string;
-  full_name: string;
+  _id: string;
+  displayName: string;
   email: string;
-  phone: string | null;
-  user_type: string;
-  status: string;
-  is_verified: boolean;
-  created_at: string;
+  phoneNumber?: string;
+  userType: 'buyer' | 'farmer' | 'admin';
+  isVerified: boolean;
+  isBanned?: boolean;
+  createdAt: string;
 }
 
 const Users = () => {
@@ -23,15 +24,16 @@ const Users = () => {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [userTypeFilter, setUserTypeFilter] = useState<string>("all");
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [userTypeFilter]);
 
   useEffect(() => {
     const filtered = users.filter(
       (user) =>
-        user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredUsers(filtered);
@@ -39,65 +41,47 @@ const Users = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setUsers(data || []);
-      setFilteredUsers(data || []);
-    } catch (error) {
+      const data = await adminApi.getUsers({
+        userType: userTypeFilter !== 'all' ? userTypeFilter : undefined,
+        status: undefined, // Will filter client-side for banned
+      });
+      setUsers(data.users || []);
+      setFilteredUsers(data.users || []);
+    } catch (error: any) {
       console.error("Error fetching users:", error);
-      toast.error("Failed to load users");
+      toast.error(error.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
   };
 
-  const updateUserStatus = async (userId: string, status: string) => {
+  const updateUserStatus = async (userId: string, isBanned: boolean) => {
     try {
-      const { error } = await supabase
-        .from("users")
-        .update({ status })
-        .eq("id", userId);
-
-      if (error) throw error;
-      toast.success(`User ${status === "banned" ? "banned" : "activated"} successfully`);
+      await adminApi.updateUser(userId, { isBanned });
+      toast.success(`User ${isBanned ? "banned" : "unbanned"} successfully`);
       fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user:", error);
-      toast.error("Failed to update user status");
+      toast.error(error.message || "Failed to update user status");
     }
   };
 
   const verifyUser = async (userId: string) => {
     try {
-      const { error } = await supabase
-        .from("users")
-        .update({ is_verified: true })
-        .eq("id", userId);
-
-      if (error) throw error;
+      await adminApi.updateUser(userId, { isVerified: true });
       toast.success("User verified successfully");
       fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error verifying user:", error);
-      toast.error("Failed to verify user");
+      toast.error(error.message || "Failed to verify user");
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-primary">Active</Badge>;
-      case "banned":
-        return <Badge variant="destructive">Banned</Badge>;
-      case "pending":
-        return <Badge variant="secondary">Pending</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+  const getStatusBadge = (user: User) => {
+    if (user.isBanned) {
+      return <Badge variant="destructive">Banned</Badge>;
     }
+    return <Badge className="bg-primary">Active</Badge>;
   };
 
   if (loading) {
@@ -109,11 +93,22 @@ const Users = () => {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">User Management</h1>
-        <p className="text-muted-foreground">Manage marketplace users</p>
-      </div>
+    <div className="space-y-6 animate-fade-in relative">
+      {/* Jamaican Produce Pattern Overlay */}
+      <div 
+        className="fixed inset-0 opacity-5 pointer-events-none z-0"
+        style={{
+          backgroundImage: `url(${jamaicaPattern})`,
+          backgroundRepeat: "repeat",
+          backgroundSize: "200px",
+        }}
+      />
+
+      <div className="relative z-10">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">User Management</h1>
+          <p className="text-muted-foreground">Manage marketplace users</p>
+        </div>
 
       <Card className="glass border-white/20">
         <CardHeader>
@@ -131,47 +126,70 @@ const Users = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            <div className="mb-4 flex gap-2">
+              <Button
+                variant={userTypeFilter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUserTypeFilter("all")}
+              >
+                All
+              </Button>
+              <Button
+                variant={userTypeFilter === "buyer" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUserTypeFilter("buyer")}
+              >
+                Buyers
+              </Button>
+              <Button
+                variant={userTypeFilter === "farmer" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUserTypeFilter("farmer")}
+              >
+                Farmers
+              </Button>
+            </div>
             {filteredUsers.map((user) => (
               <div
-                key={user.id}
+                key={user._id}
                 className="p-4 rounded-lg border border-border hover:bg-muted/5 transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-foreground">{user.full_name}</h3>
-                      {getStatusBadge(user.status)}
-                      {user.is_verified && (
+                      <h3 className="font-semibold text-foreground">{user.displayName}</h3>
+                      {getStatusBadge(user)}
+                      {user.isVerified && (
                         <Badge variant="outline" className="bg-accent/10">
                           <CheckCircle className="w-3 h-3 mr-1" />
                           Verified
                         </Badge>
                       )}
-                      <Badge variant="outline">{user.user_type}</Badge>
+                      <Badge variant="outline">{user.userType}</Badge>
                     </div>
                     <div className="text-sm text-muted-foreground space-y-1">
                       <p>Email: {user.email}</p>
-                      {user.phone && <p>Phone: {user.phone}</p>}
-                      <p>Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+                      {user.phoneNumber && <p>Phone: {user.phoneNumber}</p>}
+                      <p>Joined: {new Date(user.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {!user.is_verified && (
+                    {!user.isVerified && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => verifyUser(user.id)}
+                        onClick={() => verifyUser(user._id)}
                         className="border-accent text-accent hover:bg-accent/10"
                       >
                         <CheckCircle className="w-4 h-4 mr-1" />
                         Verify
                       </Button>
                     )}
-                    {user.status === "active" ? (
+                    {!user.isBanned ? (
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => updateUserStatus(user.id, "banned")}
+                        onClick={() => updateUserStatus(user._id, true)}
                       >
                         <Ban className="w-4 h-4 mr-1" />
                         Ban
@@ -180,10 +198,10 @@ const Users = () => {
                       <Button
                         size="sm"
                         className="gradient-primary text-white"
-                        onClick={() => updateUserStatus(user.id, "active")}
+                        onClick={() => updateUserStatus(user._id, false)}
                       >
                         <CheckCircle className="w-4 h-4 mr-1" />
-                        Activate
+                        Unban
                       </Button>
                     )}
                   </div>
@@ -198,6 +216,7 @@ const Users = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

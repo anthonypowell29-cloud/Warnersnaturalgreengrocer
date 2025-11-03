@@ -18,6 +18,7 @@ import orderRoutes from './routes/order.routes';
 import paymentRoutes from './routes/payment.routes';
 import reviewRoutes from './routes/review.routes';
 import messageRoutes from './routes/message.routes';
+import adminRoutes from './routes/admin.routes';
 
 const app = express();
 
@@ -25,7 +26,10 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:8080', 'http://localhost:3000', 'http://127.0.0.1:8080'],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -70,6 +74,7 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/messages', messageRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {

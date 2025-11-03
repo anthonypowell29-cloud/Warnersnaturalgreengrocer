@@ -5,7 +5,7 @@ export interface IUser extends Document {
   password: string;
   displayName: string;
   photoURL?: string;
-  userType: 'buyer' | 'farmer';
+  userType: 'buyer' | 'farmer' | 'admin';
   phoneNumber?: string;
   addresses: {
     street: string;
@@ -15,6 +15,7 @@ export interface IUser extends Document {
     isDefault: boolean;
   }[];
   isVerified: boolean;
+  isBanned?: boolean; // For admin to ban users
   verificationToken?: string;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
@@ -61,7 +62,7 @@ const UserSchema = new Schema<IUser>(
     },
     userType: {
       type: String,
-      enum: ['buyer', 'farmer'],
+      enum: ['buyer', 'farmer', 'admin'],
       required: [true, 'Please select user type'],
     },
     phoneNumber: {
@@ -72,6 +73,10 @@ const UserSchema = new Schema<IUser>(
       default: [],
     },
     isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isBanned: {
       type: Boolean,
       default: false,
     },

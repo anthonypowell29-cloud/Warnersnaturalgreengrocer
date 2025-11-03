@@ -16,7 +16,7 @@ const payment_service_1 = require("../services/payment.service");
 const createOrder = async (req, res) => {
     try {
         const userId = req.user?.userId || '';
-        const { shippingAddressId, paymentMethod, notes, shippingFee } = req.body;
+        const { shippingAddressId, paymentMethod, deliveryOption, notes, shippingFee } = req.body;
         // Get user to fetch shipping address
         const user = await User_model_1.default.findById(userId);
         if (!user) {
@@ -78,7 +78,9 @@ const createOrder = async (req, res) => {
                 title: product.title,
             });
         }
-        const finalShippingFee = shippingFee || 500; // Default JMD 500
+        // Calculate shipping fee based on delivery option
+        const finalDeliveryOption = deliveryOption || 'delivery';
+        const finalShippingFee = finalDeliveryOption === 'pickup' ? 0 : (shippingFee || 500); // Default JMD 500
         const subtotal = cart.subtotal;
         const totalAmount = subtotal + finalShippingFee;
         // Create order

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import Review, { IReviewModel } from '../models/Review.model';
+import Review, { IReviewModel, IReview } from '../models/Review.model';
+import mongoose from 'mongoose';
 import Product from '../models/Product.model';
 import Order from '../models/Order.model';
 import { TokenPayload } from '../utils/jwt.util';
@@ -27,13 +28,13 @@ export const getProductReviews = async (req: Request, res: Response): Promise<vo
       isModerated: true,
     };
 
-    const reviews = await Review.find(query)
+    const reviews = await (Review as unknown as mongoose.Model<IReview>).find(query)
       .populate('userId', 'displayName photoURL')
       .sort(sort as string)
       .skip(skip)
       .limit(limitNum);
 
-    const total = await Review.countDocuments(query);
+    const total = await (Review as unknown as mongoose.Model<IReview>).countDocuments(query);
 
     res.status(200).json({
       success: true,
@@ -63,7 +64,7 @@ export const getProductReviews = async (req: Request, res: Response): Promise<vo
 // @access  Public
 export const getReview = async (req: Request, res: Response): Promise<void> => {
   try {
-    const review = await Review.findById(req.params.id)
+    const review = await (Review as unknown as mongoose.Model<IReview>).findById(req.params.id)
       .populate('userId', 'displayName photoURL')
       .populate('productId', 'title images');
 
@@ -126,7 +127,7 @@ export const createReview = async (req: AuthenticatedRequest, res: Response): Pr
     }
 
     // Check if user already reviewed this product
-    const existingReview = await Review.findOne({ productId, userId });
+    const existingReview = await (Review as unknown as mongoose.Model<IReview>).findOne({ productId, userId });
     if (existingReview) {
       res.status(400).json({
         success: false,
@@ -166,7 +167,7 @@ export const createReview = async (req: AuthenticatedRequest, res: Response): Pr
     }
 
     // Create review
-    const review = await Review.create({
+    const review = await (Review as unknown as mongoose.Model<IReview>).create({
       productId,
       userId,
       orderId: orderId || undefined,
@@ -212,7 +213,7 @@ export const updateReview = async (req: AuthenticatedRequest, res: Response): Pr
     const { id } = req.params;
     const { rating, comment, images } = req.body;
 
-    const review = await Review.findById(id);
+    const review = await (Review as unknown as mongoose.Model<IReview>).findById(id);
     if (!review) {
       res.status(404).json({
         success: false,
@@ -280,7 +281,7 @@ export const deleteReview = async (req: AuthenticatedRequest, res: Response): Pr
     const userId = req.user?.userId || '';
     const { id } = req.params;
 
-    const review = await Review.findById(id);
+    const review = await (Review as unknown as mongoose.Model<IReview>).findById(id);
     if (!review) {
       res.status(404).json({
         success: false,
@@ -337,7 +338,7 @@ export const deleteReview = async (req: AuthenticatedRequest, res: Response): Pr
 export const markHelpful = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const review = await Review.findById(id);
+    const review = await (Review as unknown as mongoose.Model<IReview>).findById(id);
 
     if (!review) {
       res.status(404).json({
@@ -377,7 +378,7 @@ export const reportReview = async (req: AuthenticatedRequest, res: Response): Pr
     const { id } = req.params;
     const { reason } = req.body;
 
-    const review = await Review.findById(id);
+    const review = await (Review as unknown as mongoose.Model<IReview>).findById(id);
     if (!review) {
       res.status(404).json({
         success: false,
@@ -420,13 +421,13 @@ export const reportReview = async (req: AuthenticatedRequest, res: Response): Pr
 export const getUserReviews = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
-    const reviews = await Review.find({ userId, isModerated: true })
+    const reviews = await (Review as unknown as mongoose.Model<IReview>).find({ userId, isModerated: true })
       .populate('productId', 'title images')
       .sort({ createdAt: -1 })
       .limit(20);
 
     // Calculate average rating for user
-    const stats = await Review.aggregate([
+    const stats = await (Review as unknown as mongoose.Model<IReview>).aggregate([
       { $match: { userId: new (require('mongoose')).Types.ObjectId(userId), isModerated: true } },
       {
         $group: {
