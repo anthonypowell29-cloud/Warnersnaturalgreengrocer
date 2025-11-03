@@ -49,8 +49,8 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    // Get cart
-    const cart = await Cart.findOne({ userId }).populate('items.productId');
+    // Get cart (don't populate to avoid serialization issues)
+    const cart = await Cart.findOne({ userId });
     if (!cart || cart.items.length === 0) {
       res.status(400).json({
         success: false,
@@ -67,7 +67,11 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
     const orderItems = [];
 
     for (const cartItem of cart.items) {
-      const product = await Product.findById((cartItem as any).productId);
+      // Get productId - handle both populated and unpopulated cases
+      const productId = (cartItem as any).productId?._id || (cartItem as any).productId;
+      
+      // Fetch product fresh from database to ensure we have latest stock/availability
+      const product = await Product.findById(productId).lean();
       if (!product || !product.available || product.stock < (cartItem as any).quantity) {
         res.status(400).json({
           success: false,
@@ -79,8 +83,19 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
         return;
       }
 
+      // Validate all products are from the same seller
+      const productSellerId = product.sellerId.toString();
       if (!sellerId) {
-        sellerId = product.sellerId.toString();
+        sellerId = productSellerId;
+      } else if (sellerId !== productSellerId) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'MULTIPLE_SELLERS',
+            message: 'All items in cart must be from the same seller',
+          },
+        });
+        return;
       }
 
       orderItems.push({
@@ -195,10 +210,13 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
       });
     }
 
+    // Convert order to plain object to avoid Mongoose serialization issues
+    const orderData = order.toObject ? order.toObject() : order;
+
     res.status(201).json({
       success: true,
       data: {
-        order,
+        order: orderData,
         payment: paymentData,
       },
       message: 'Order created successfully',
@@ -230,7 +248,8 @@ export const getOrders = async (req: AuthenticatedRequest, res: Response): Promi
     const orders = await Order.find(query)
       .populate('items.productId', 'title images')
       .populate('sellerId', 'displayName photoURL')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean(); // Use lean() to return plain objects
 
     res.status(200).json({
       success: true,
@@ -257,7 +276,8 @@ export const getOrder = async (req: AuthenticatedRequest, res: Response): Promis
 
     const order = await Order.findOne({ _id: id, buyerId: userId })
       .populate('items.productId', 'title images price')
-      .populate('sellerId', 'displayName photoURL phoneNumber');
+      .populate('sellerId', 'displayName photoURL phoneNumber')
+      .lean(); // Use lean() to return plain object
 
     if (!order) {
       res.status(404).json({
@@ -307,9 +327,12 @@ export const verifyPayment = async (req: AuthenticatedRequest, res: Response): P
     }
 
     if (order.paymentStatus === 'paid') {
+      // Convert to plain object to avoid Mongoose serialization issues
+      const orderData = order.toObject ? order.toObject() : order;
+      
       res.status(200).json({
         success: true,
-        data: order,
+        data: orderData,
         message: 'Payment already verified',
       });
       return;
@@ -339,9 +362,12 @@ export const verifyPayment = async (req: AuthenticatedRequest, res: Response): P
       await order.save();
     }
 
+    // Convert to plain object to avoid Mongoose serialization issues
+    const orderData = order.toObject ? order.toObject() : order;
+
     res.status(200).json({
       success: true,
-      data: order,
+      data: orderData,
       message: 'Payment verification completed',
     });
   } catch (error: any) {
@@ -435,7 +461,8 @@ export const getSellerOrders = async (req: AuthenticatedRequest, res: Response):
       .populate('buyerId', 'displayName photoURL phoneNumber')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean(); // Use lean() to return plain objects
 
     const total = await Order.countDocuments(query);
 
@@ -557,9 +584,12 @@ export const updateOrderStatus = async (req: AuthenticatedRequest, res: Response
 
     // TODO: Send push notification to buyer about status update
 
+    // Convert to plain object to avoid Mongoose serialization issues
+    const orderData = order.toObject ? order.toObject() : order;
+
     res.status(200).json({
       success: true,
-      data: order,
+      data: orderData,
       message: `Order status updated from ${oldStatus} to ${status}`,
     });
   } catch (error: any) {

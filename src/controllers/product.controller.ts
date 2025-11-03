@@ -87,10 +87,12 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
 // @access  Public
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
   try {
-    const product = await Product.findById(req.params.id).populate(
-      'sellerId',
-      'displayName photoURL userType isVerified'
-    );
+    const product = await Product.findById(req.params.id)
+      .populate(
+        'sellerId',
+        'displayName photoURL userType isVerified'
+      )
+      .lean(); // Use lean() to return plain object and avoid Mongoose serialization issues
 
     if (!product) {
       res.status(404).json({
@@ -194,9 +196,12 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       isApproved: false, // Requires admin approval
     });
 
+    // Convert to plain object to avoid Mongoose serialization issues
+    const productData = product.toObject ? product.toObject() : product;
+
     res.status(201).json({
       success: true,
-      data: product,
+      data: productData,
       message: 'Product created successfully. Pending approval.',
     });
   } catch (error: any) {
@@ -289,9 +294,12 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
 
     await product.save();
 
+    // Convert to plain object to avoid Mongoose serialization issues
+    const productData = product.toObject ? product.toObject() : product;
+
     res.status(200).json({
       success: true,
-      data: product,
+      data: productData,
       message: 'Product updated successfully',
     });
   } catch (error: any) {
@@ -373,7 +381,9 @@ export const getMyProducts = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const products = await Product.find({ sellerId: userId }).sort('-createdAt');
+    const products = await Product.find({ sellerId: userId })
+      .sort('-createdAt')
+      .lean(); // Use lean() to return plain objects
 
     res.status(200).json({
       success: true,
