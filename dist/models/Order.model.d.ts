@@ -30,6 +30,14 @@ export interface IOrder extends Document {
     shippingAddress: IShippingAddress;
     deliveryOption: 'delivery' | 'pickup';
     notes?: string;
+    statusHistory?: Array<{
+        status: OrderStatus;
+        timestamp: Date;
+        updatedBy: mongoose.Types.ObjectId;
+        notes?: string;
+    }>;
+    estimatedDeliveryDate?: Date;
+    actualDeliveryDate?: Date;
     createdAt: Date;
     updatedAt: Date;
 }

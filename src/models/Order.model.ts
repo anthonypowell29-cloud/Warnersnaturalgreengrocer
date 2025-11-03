@@ -34,6 +34,16 @@ export interface IOrder extends Document {
   shippingAddress: IShippingAddress;
   deliveryOption: 'delivery' | 'pickup';
   notes?: string;
+  // Status tracking
+  statusHistory?: Array<{
+    status: OrderStatus;
+    timestamp: Date;
+    updatedBy: mongoose.Types.ObjectId;
+    notes?: string;
+  }>;
+  // Estimated delivery/pickup time
+  estimatedDeliveryDate?: Date;
+  actualDeliveryDate?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -137,6 +147,24 @@ const OrderSchema = new Schema<IOrder>(
     },
     notes: {
       type: String,
+    },
+    statusHistory: {
+      type: [
+        {
+          status: { type: String, enum: ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'] },
+          timestamp: { type: Date, default: Date.now },
+          updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+          notes: { type: String },
+        },
+      ],
+      default: [],
+      _id: false,
+    },
+    estimatedDeliveryDate: {
+      type: Date,
+    },
+    actualDeliveryDate: {
+      type: Date,
     },
   },
   {

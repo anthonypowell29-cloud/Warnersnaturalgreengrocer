@@ -131,6 +131,24 @@ const OrderSchema = new mongoose_1.Schema({
     notes: {
         type: String,
     },
+    statusHistory: {
+        type: [
+            {
+                status: { type: String, enum: ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'] },
+                timestamp: { type: Date, default: Date.now },
+                updatedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+                notes: { type: String },
+            },
+        ],
+        default: [],
+        _id: false,
+    },
+    estimatedDeliveryDate: {
+        type: Date,
+    },
+    actualDeliveryDate: {
+        type: Date,
+    },
 }, {
     timestamps: true,
 });

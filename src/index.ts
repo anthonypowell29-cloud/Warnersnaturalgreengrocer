@@ -17,6 +17,7 @@ import cartRoutes from './routes/cart.routes';
 import orderRoutes from './routes/order.routes';
 import paymentRoutes from './routes/payment.routes';
 import reviewRoutes from './routes/review.routes';
+import messageRoutes from './routes/message.routes';
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
+app.use('/api/v1/messages', messageRoutes);
 
 // 404 handler
 app.use((req, res) => {

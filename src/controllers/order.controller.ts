@@ -18,7 +18,7 @@ interface AuthenticatedRequest extends Request {
 export const createOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || '';
-    const { shippingAddressId, paymentMethod, notes, shippingFee } = req.body;
+    const { shippingAddressId, paymentMethod, deliveryOption, notes, shippingFee } = req.body;
 
     // Get user to fetch shipping address
     const user = await User.findById(userId);
@@ -91,7 +91,9 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
       });
     }
 
-    const finalShippingFee = shippingFee || 500; // Default JMD 500
+    // Calculate shipping fee based on delivery option
+    const finalDeliveryOption = deliveryOption || 'delivery';
+    const finalShippingFee = finalDeliveryOption === 'pickup' ? 0 : (shippingFee || 500); // Default JMD 500
     const subtotal = cart.subtotal;
     const totalAmount = subtotal + finalShippingFee;
 
@@ -111,7 +113,16 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
         parish: shippingAddress.parish,
         postalCode: shippingAddress.postalCode,
       },
+      deliveryOption: deliveryOption || 'delivery',
       notes,
+      // Initialize status history
+      statusHistory: [
+        {
+          status: 'pending',
+          timestamp: new Date(),
+          updatedBy: userId as any,
+        },
+      ],
     });
 
     // Handle payment based on method
@@ -397,6 +408,208 @@ export const cancelOrder = async (req: AuthenticatedRequest, res: Response): Pro
       error: {
         code: 'INTERNAL_ERROR',
         message: error.message || 'Failed to cancel order',
+      },
+    });
+  }
+};
+
+// @desc    Get seller's orders
+// @route   GET /api/v1/orders/seller
+// @access  Private (Seller only)
+export const getSellerOrders = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId || '';
+    const { status, page = 1, limit = 10 } = req.query;
+
+    const query: any = { sellerId: userId };
+    if (status) {
+      query.status = status;
+    }
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const orders = await Order.find(query)
+      .populate('items.productId', 'title images')
+      .populate('buyerId', 'displayName photoURL phoneNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    const total = await Order.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orders,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error.message || 'Failed to fetch seller orders',
+      },
+    });
+  }
+};
+
+// @desc    Update order status (Seller only)
+// @route   PUT /api/v1/orders/:id/status
+// @access  Private (Seller only)
+export const updateOrderStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId || '';
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'ORDER_NOT_FOUND',
+          message: 'Order not found',
+        },
+      });
+      return;
+    }
+
+    // Verify seller owns this order
+    if (order.sellerId?.toString() !== userId) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only update your own orders',
+        },
+      });
+      return;
+    }
+
+    // Validate status transition
+    const validStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_STATUS',
+          message: 'Invalid order status',
+        },
+      });
+      return;
+    }
+
+    // Prevent status downgrades
+    const statusOrder = {
+      pending: 0,
+      confirmed: 1,
+      preparing: 2,
+      ready: 3,
+      delivered: 4,
+      cancelled: 5,
+    };
+
+    if (statusOrder[status as keyof typeof statusOrder] < statusOrder[order.status as keyof typeof statusOrder]) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_STATUS_TRANSITION',
+          message: 'Cannot revert order status',
+        },
+      });
+      return;
+    }
+
+    // Update status
+    const oldStatus = order.status;
+    order.status = status as any;
+
+    // Add to status history
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+    order.statusHistory.push({
+      status: status as any,
+      timestamp: new Date(),
+      updatedBy: userId as any,
+      notes: notes || undefined,
+    });
+
+    // Set dates based on status
+    if (status === 'delivered') {
+      order.actualDeliveryDate = new Date();
+    } else if (status === 'ready' && order.deliveryOption === 'pickup') {
+      order.estimatedDeliveryDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2 days
+    } else if (status === 'preparing' && order.deliveryOption === 'delivery') {
+      order.estimatedDeliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days
+    }
+
+    await order.save();
+
+    // TODO: Send push notification to buyer about status update
+
+    res.status(200).json({
+      success: true,
+      data: order,
+      message: `Order status updated from ${oldStatus} to ${status}`,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error.message || 'Failed to update order status',
+      },
+    });
+  }
+};
+
+// @desc    Get order tracking info
+// @route   GET /api/v1/orders/:id/tracking
+// @access  Private
+export const getOrderTracking = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId || '';
+    const { id } = req.params;
+
+    const order = await Order.findOne({
+      _id: id,
+      $or: [{ buyerId: userId }, { sellerId: userId }],
+    })
+      .populate('buyerId', 'displayName photoURL phoneNumber')
+      .populate('sellerId', 'displayName photoURL phoneNumber')
+      .populate('items.productId', 'title images');
+
+    if (!order) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'ORDER_NOT_FOUND',
+          message: 'Order not found',
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error.message || 'Failed to fetch order tracking',
       },
     });
   }
