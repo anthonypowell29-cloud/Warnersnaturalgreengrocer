@@ -3,47 +3,39 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOrderStatus = exports.verifyPayment = exports.getOrder = exports.getOrders = exports.createOrder = void 0;
+exports.cancelOrder = exports.verifyPayment = exports.getOrder = exports.getOrders = exports.createOrder = void 0;
 const Order_model_1 = __importDefault(require("../models/Order.model"));
 const Cart_model_1 = __importDefault(require("../models/Cart.model"));
 const Product_model_1 = __importDefault(require("../models/Product.model"));
+const Transaction_model_1 = __importDefault(require("../models/Transaction.model"));
 const User_model_1 = __importDefault(require("../models/User.model"));
-const payment_service_1 = __importDefault(require("../services/payment.service"));
-// @desc    Create order from cart
+const payment_service_1 = require("../services/payment.service");
+// @desc    Create new order
 // @route   POST /api/v1/orders
 // @access  Private
 const createOrder = async (req, res) => {
     try {
-        const userId = req.user?.userId;
-        const { shippingAddressId, paymentMethod, notes } = req.body;
-        if (!shippingAddressId || !paymentMethod) {
-            res.status(400).json({
-                success: false,
-                error: {
-                    code: 'VALIDATION_ERROR',
-                    message: 'Shipping address ID and payment method are required',
-                },
-            });
-            return;
-        }
-        // Get user and shipping address
+        const userId = req.user?.userId || '';
+        const { shippingAddressId, paymentMethod, notes, shippingFee } = req.body;
+        // Get user to fetch shipping address
         const user = await User_model_1.default.findById(userId);
         if (!user) {
             res.status(404).json({
                 success: false,
                 error: {
-                    code: 'NOT_FOUND',
+                    code: 'USER_NOT_FOUND',
                     message: 'User not found',
                 },
             });
             return;
         }
-        const shippingAddress = user.addresses.find((addr) => String(addr._id) === String(shippingAddressId));
+        // Find shipping address
+        const shippingAddress = user.addresses.find((addr) => addr._id?.toString() === shippingAddressId);
         if (!shippingAddress) {
             res.status(404).json({
                 success: false,
                 error: {
-                    code: 'NOT_FOUND',
+                    code: 'ADDRESS_NOT_FOUND',
                     message: 'Shipping address not found',
                 },
             });
@@ -61,150 +53,125 @@ const createOrder = async (req, res) => {
             });
             return;
         }
-        // Validate products and calculate totals
+        // Validate products and get seller
+        let sellerId;
         const orderItems = [];
-        let subtotal = 0;
-        let sellerId = null;
-        for (const item of cart.items) {
-            const product = await Product_model_1.default.findById(item.productId);
-            if (!product) {
-                res.status(400).json({
-                    success: false,
-                    error: {
-                        code: 'PRODUCT_NOT_FOUND',
-                        message: `Product ${item.productId} not found`,
-                    },
-                });
-                return;
-            }
-            if (!product.available || !product.isApproved) {
+        for (const cartItem of cart.items) {
+            const product = await Product_model_1.default.findById(cartItem.productId);
+            if (!product || !product.available || product.stock < cartItem.quantity) {
                 res.status(400).json({
                     success: false,
                     error: {
                         code: 'PRODUCT_UNAVAILABLE',
-                        message: `Product "${product.title}" is not available`,
+                        message: `Product ${product?.title || 'unknown'} is not available`,
                     },
                 });
                 return;
             }
-            if (product.stock < item.quantity) {
-                res.status(400).json({
-                    success: false,
-                    error: {
-                        code: 'INSUFFICIENT_STOCK',
-                        message: `Product "${product.title}" has only ${product.stock} units available`,
-                    },
-                });
-                return;
-            }
-            // Set seller ID (all items should be from the same seller for now)
             if (!sellerId) {
-                sellerId = String(product.sellerId);
+                sellerId = product.sellerId.toString();
             }
-            else if (String(product.sellerId) !== sellerId) {
-                // For simplicity, we'll only allow orders from one seller at a time
-                // In production, you might want to split orders per seller
-                res.status(400).json({
-                    success: false,
-                    error: {
-                        code: 'MULTIPLE_SELLERS',
-                        message: 'Cannot order from multiple sellers in one order. Please create separate orders.',
-                    },
-                });
-                return;
-            }
-            const itemTotal = product.price * item.quantity;
-            subtotal += itemTotal;
             orderItems.push({
                 productId: product._id,
-                productTitle: product.title,
-                productImage: product.images[0],
-                quantity: item.quantity,
-                price: product.price,
-                unit: product.unit || 'unit',
+                quantity: cartItem.quantity,
+                price: cartItem.price,
+                title: product.title,
             });
         }
-        // Calculate shipping fee (flat rate for now - can be dynamic based on location)
-        const shippingFee = calculateShippingFee(shippingAddress.parish);
-        const tax = 0; // GCT is 0% for food items in Jamaica (as of 2024)
-        const total = subtotal + shippingFee + tax;
+        const finalShippingFee = shippingFee || 500; // Default JMD 500
+        const subtotal = cart.subtotal;
+        const totalAmount = subtotal + finalShippingFee;
         // Create order
         const order = await Order_model_1.default.create({
             buyerId: userId,
-            sellerId: sellerId,
+            sellerId,
             items: orderItems,
+            subtotal,
+            shippingFee: finalShippingFee,
+            totalAmount,
+            paymentMethod,
+            paymentGateway: paymentMethod === 'card' ? 'wipay' : 'bank_transfer',
             shippingAddress: {
                 street: shippingAddress.street,
                 city: shippingAddress.city,
                 parish: shippingAddress.parish,
                 postalCode: shippingAddress.postalCode,
-                contactName: user.displayName,
-                contactPhone: user.phoneNumber,
             },
-            subtotal,
-            shippingFee,
-            tax,
-            total,
-            currency: 'JMD',
-            paymentMethod: paymentMethod,
-            paymentStatus: 'pending',
-            orderStatus: 'pending',
-            notes: notes || undefined,
+            notes,
         });
-        // If payment method is card, initialize Wipay payment
+        // Handle payment based on method
+        let paymentData = null;
         if (paymentMethod === 'card') {
             try {
-                const paymentData = await payment_service_1.default.initializePayment({
-                    email: user.email,
-                    amount: total,
-                    orderNumber: order.orderNumber,
-                    orderId: String(order._id),
-                    buyerId: String(userId),
-                    description: `Order ${order.orderNumber}`,
+                // Initialize WIpay payment
+                const paymentRequest = await payment_service_1.paymentService.createPayment({
+                    amount: totalAmount,
+                    currency: 'JMD',
+                    orderId: order.orderNumber,
+                    customerEmail: user.email,
                     customerName: user.displayName,
-                    phone: user.phoneNumber,
+                    description: `Order ${order.orderNumber}`,
+                    returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:8081'}/order-confirmation?orderId=${order._id}`,
+                    cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:8081'}/checkout?cancelled=true`,
+                });
+                // Create transaction record
+                await Transaction_model_1.default.create({
+                    orderId: order._id,
+                    amount: totalAmount,
+                    currency: 'JMD',
+                    paymentGateway: 'wipay',
+                    paymentReference: paymentRequest.reference,
+                    gatewayTransactionId: paymentRequest.transactionId,
+                    status: 'pending',
                 });
                 // Update order with payment reference
-                order.paymentReference = paymentData.transactionId;
+                order.paymentReference = paymentRequest.reference;
                 await order.save();
-                res.status(201).json({
-                    success: true,
-                    data: {
-                        order,
-                        payment: {
-                            paymentUrl: paymentData.paymentUrl,
-                            transactionId: paymentData.transactionId,
-                        },
-                    },
-                    message: 'Order created. Please complete payment.',
-                });
-                return;
+                paymentData = {
+                    paymentUrl: paymentRequest.paymentUrl,
+                    transactionId: paymentRequest.transactionId,
+                    reference: paymentRequest.reference,
+                };
             }
             catch (paymentError) {
-                // If payment initialization fails, still create the order but mark it
-                console.error('Payment initialization failed:', paymentError);
+                // If payment initialization fails, still create order but mark as failed
                 order.paymentStatus = 'failed';
                 await order.save();
                 res.status(500).json({
                     success: false,
                     error: {
                         code: 'PAYMENT_INIT_FAILED',
-                        message: `Order created but payment initialization failed: ${paymentError.message}`,
+                        message: paymentError.message || 'Failed to initialize payment',
                     },
-                    data: { order },
                 });
                 return;
             }
         }
         else {
-            // For bank transfer or cash on delivery, just create the order
-            res.status(201).json({
-                success: true,
-                data: { order },
-                message: 'Order created successfully',
+            // Bank transfer - create transaction record
+            await Transaction_model_1.default.create({
+                orderId: order._id,
+                amount: totalAmount,
+                currency: 'JMD',
+                paymentGateway: 'bank_transfer',
+                paymentReference: order.orderNumber,
+                status: 'pending',
             });
-            return;
         }
+        // Update product stock
+        for (const item of orderItems) {
+            await Product_model_1.default.findByIdAndUpdate(item.productId, {
+                $inc: { stock: -item.quantity },
+            });
+        }
+        res.status(201).json({
+            success: true,
+            data: {
+                order,
+                payment: paymentData,
+            },
+            message: 'Order created successfully',
+        });
     }
     catch (error) {
         res.status(500).json({
@@ -222,37 +189,19 @@ exports.createOrder = createOrder;
 // @access  Private
 const getOrders = async (req, res) => {
     try {
-        const userId = req.user?.userId;
-        const userType = req.user?.userType;
-        const { status, limit = 50, page = 1 } = req.query;
-        const query = {};
-        if (userType === 'buyer') {
-            query.buyerId = userId;
-        }
-        else if (userType === 'farmer') {
-            query.sellerId = userId;
-        }
+        const userId = req.user?.userId || '';
+        const { status } = req.query;
+        const query = { buyerId: userId };
         if (status) {
-            query.orderStatus = status;
+            query.status = status;
         }
         const orders = await Order_model_1.default.find(query)
-            .populate('buyerId', 'displayName email phoneNumber')
-            .populate('sellerId', 'displayName email phoneNumber')
-            .sort({ createdAt: -1 })
-            .limit(Number(limit))
-            .skip((Number(page) - 1) * Number(limit));
-        const total = await Order_model_1.default.countDocuments(query);
+            .populate('items.productId', 'title images')
+            .populate('sellerId', 'displayName photoURL')
+            .sort({ createdAt: -1 });
         res.status(200).json({
             success: true,
-            data: {
-                orders,
-                pagination: {
-                    page: Number(page),
-                    limit: Number(limit),
-                    total,
-                    pages: Math.ceil(total / Number(limit)),
-                },
-            },
+            data: orders,
         });
     }
     catch (error) {
@@ -271,31 +220,17 @@ exports.getOrders = getOrders;
 // @access  Private
 const getOrder = async (req, res) => {
     try {
-        const userId = req.user?.userId;
+        const userId = req.user?.userId || '';
         const { id } = req.params;
-        const order = await Order_model_1.default.findById(id)
-            .populate('buyerId', 'displayName email phoneNumber')
-            .populate('sellerId', 'displayName email phoneNumber')
-            .populate('items.productId');
+        const order = await Order_model_1.default.findOne({ _id: id, buyerId: userId })
+            .populate('items.productId', 'title images price')
+            .populate('sellerId', 'displayName photoURL phoneNumber');
         if (!order) {
             res.status(404).json({
                 success: false,
                 error: {
-                    code: 'NOT_FOUND',
+                    code: 'ORDER_NOT_FOUND',
                     message: 'Order not found',
-                },
-            });
-            return;
-        }
-        // Check if user has access to this order
-        const isBuyer = String(order.buyerId) === String(userId);
-        const isSeller = String(order.sellerId) === String(userId);
-        if (!isBuyer && !isSeller) {
-            res.status(403).json({
-                success: false,
-                error: {
-                    code: 'FORBIDDEN',
-                    message: 'You do not have access to this order',
                 },
             });
             return;
@@ -316,81 +251,53 @@ const getOrder = async (req, res) => {
     }
 };
 exports.getOrder = getOrder;
-// @desc    Verify payment (for PayStack callback)
-// @route   GET /api/v1/orders/:id/verify-payment
+// @desc    Verify payment for order
+// @route   POST /api/v1/orders/:id/verify-payment
 // @access  Private
 const verifyPayment = async (req, res) => {
     try {
+        const userId = req.user?.userId || '';
         const { id } = req.params;
-        const { reference } = req.query;
-        if (!reference) {
-            res.status(400).json({
-                success: false,
-                error: {
-                    code: 'VALIDATION_ERROR',
-                    message: 'Payment reference is required',
-                },
-            });
-            return;
-        }
-        const order = await Order_model_1.default.findById(id);
+        const { reference } = req.body;
+        const order = await Order_model_1.default.findOne({ _id: id, buyerId: userId });
         if (!order) {
             res.status(404).json({
                 success: false,
                 error: {
-                    code: 'NOT_FOUND',
+                    code: 'ORDER_NOT_FOUND',
                     message: 'Order not found',
                 },
             });
             return;
         }
-        // Verify payment with Wipay
-        const verification = await payment_service_1.default.verifyPayment(reference);
-        if (verification.success && (verification.status === 'completed' || verification.status === 'success')) {
-            // Payment successful
-            order.paymentStatus = 'paid';
-            order.orderStatus = 'confirmed';
-            order.paymentTransactionId = verification.transactionId;
-            await order.save();
-            // Update product stock
-            for (const item of order.items) {
-                await Product_model_1.default.findByIdAndUpdate(item.productId, {
-                    $inc: { stock: -item.quantity },
-                });
-            }
-            // Clear cart
-            const cart = await Cart_model_1.default.findOne({ userId: order.buyerId });
-            if (cart) {
-                cart.items = [];
-                await cart.save();
-            }
+        if (order.paymentStatus === 'paid') {
             res.status(200).json({
                 success: true,
-                data: {
-                    order,
-                    payment: {
-                        verified: true,
-                        amount: verification.amount,
-                        currency: verification.currency,
-                        status: verification.status,
-                    },
-                },
-                message: 'Payment verified successfully',
+                data: order,
+                message: 'Payment already verified',
             });
+            return;
         }
-        else {
-            // Payment failed
-            order.paymentStatus = 'failed';
+        // Verify payment with WIpay
+        if (order.paymentGateway === 'wipay' && reference) {
+            const verification = await payment_service_1.paymentService.verifyPayment(reference);
+            if (verification.status === 'success') {
+                order.paymentStatus = 'paid';
+                order.status = 'confirmed';
+                // Update transaction
+                await Transaction_model_1.default.findOneAndUpdate({ orderId: order._id }, { status: 'success', metadata: verification.metadata });
+            }
+            else {
+                order.paymentStatus = 'failed';
+                await Transaction_model_1.default.findOneAndUpdate({ orderId: order._id }, { status: 'failed' });
+            }
             await order.save();
-            res.status(400).json({
-                success: false,
-                error: {
-                    code: 'PAYMENT_FAILED',
-                    message: 'Payment verification failed',
-                },
-                data: { order },
-            });
         }
+        res.status(200).json({
+            success: true,
+            data: order,
+            message: 'Payment verification completed',
+        });
     }
     catch (error) {
         res.status(500).json({
@@ -403,51 +310,46 @@ const verifyPayment = async (req, res) => {
     }
 };
 exports.verifyPayment = verifyPayment;
-// @desc    Update order status (for sellers/admins)
-// @route   PUT /api/v1/orders/:id/status
-// @access  Private (Seller/Admin)
-const updateOrderStatus = async (req, res) => {
+// @desc    Cancel order
+// @route   PUT /api/v1/orders/:id/cancel
+// @access  Private
+const cancelOrder = async (req, res) => {
     try {
-        const userId = req.user?.userId;
+        const userId = req.user?.userId || '';
         const { id } = req.params;
-        const { orderStatus, cancellationReason } = req.body;
-        const order = await Order_model_1.default.findById(id);
+        const order = await Order_model_1.default.findOne({ _id: id, buyerId: userId });
         if (!order) {
             res.status(404).json({
                 success: false,
                 error: {
-                    code: 'NOT_FOUND',
+                    code: 'ORDER_NOT_FOUND',
                     message: 'Order not found',
                 },
             });
             return;
         }
-        // Check if user is the seller or admin
-        const isSeller = String(order.sellerId) === String(userId);
-        if (!isSeller) {
-            res.status(403).json({
+        if (order.status === 'delivered' || order.status === 'cancelled') {
+            res.status(400).json({
                 success: false,
                 error: {
-                    code: 'FORBIDDEN',
-                    message: 'Only the seller can update order status',
+                    code: 'INVALID_STATUS',
+                    message: 'Order cannot be cancelled',
                 },
             });
             return;
         }
-        // Update order status
-        order.orderStatus = orderStatus;
-        if (orderStatus === 'cancelled' && cancellationReason) {
-            order.cancellationReason = cancellationReason;
-            order.cancelledAt = new Date();
-        }
-        if (orderStatus === 'delivered') {
-            order.deliveredAt = new Date();
+        order.status = 'cancelled';
+        // Restore product stock
+        for (const item of order.items) {
+            await Product_model_1.default.findByIdAndUpdate(item.productId, {
+                $inc: { stock: item.quantity },
+            });
         }
         await order.save();
         res.status(200).json({
             success: true,
             data: order,
-            message: 'Order status updated',
+            message: 'Order cancelled successfully',
         });
     }
     catch (error) {
@@ -455,24 +357,10 @@ const updateOrderStatus = async (req, res) => {
             success: false,
             error: {
                 code: 'INTERNAL_ERROR',
-                message: error.message || 'Failed to update order status',
+                message: error.message || 'Failed to cancel order',
             },
         });
     }
 };
-exports.updateOrderStatus = updateOrderStatus;
-/**
- * Calculate shipping fee based on parish
- * This is a simple implementation - you can make it more sophisticated
- */
-function calculateShippingFee(parish) {
-    // Base shipping fee in JMD
-    const baseFee = 500; // JMD 500 base fee
-    // Remote parishes might have higher fees
-    const remoteParishes = ['St. Thomas', 'Portland', 'St. Mary', 'Hanover', 'Westmoreland'];
-    if (remoteParishes.includes(parish)) {
-        return baseFee + 300; // JMD 800 for remote areas
-    }
-    return baseFee;
-}
+exports.cancelOrder = cancelOrder;
 //# sourceMappingURL=order.controller.js.map

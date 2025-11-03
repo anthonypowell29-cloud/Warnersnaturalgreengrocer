@@ -3,152 +3,100 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.paymentService = void 0;
 const axios_1 = __importDefault(require("axios"));
 class PaymentService {
     constructor() {
         this.config = null;
-        const apiKey = process.env.WIPAY_API_KEY || '';
-        const merchantId = process.env.WIPAY_MERCHANT_ID || '';
-        const isProduction = process.env.NODE_ENV === 'production';
-        if (apiKey && merchantId) {
-            this.config = {
-                apiKey,
-                merchantId,
-                baseUrl: isProduction
-                    ? 'https://wipayfinancial.com/gateway' // Production URL (verify with Wipay)
-                    : 'https://wipayfinancial.com/sandbox', // Sandbox/Test URL (verify with Wipay)
-                isProduction,
-            };
-        }
-        else {
-            console.warn('⚠️  Wipay credentials not configured. Payment features will not work.\n' +
-                'Please set WIPAY_API_KEY and WIPAY_MERCHANT_ID in your .env file.\n' +
-                'Contact Wipay Jamaica to get your credentials: https://wipaycaribbean.com/jamaica');
-        }
+        this.apiClient = null;
     }
     /**
-     * Initialize payment with Wipay
-     * Wipay typically uses a redirect-based payment flow
+     * Initialize WIpay configuration
      */
-    async initializePayment(data) {
-        if (!this.config) {
-            throw new Error('Wipay is not configured. Please set WIPAY_API_KEY and WIPAY_MERCHANT_ID in .env file.');
+    initialize(config) {
+        this.config = config;
+        const baseURL = config.environment === 'production'
+            ? 'https://api.wipay.com/v1'
+            : 'https://sandbox.wipay.com/v1';
+        this.apiClient = axios_1.default.create({
+            baseURL,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Merchant-Id': config.merchantId,
+                'X-Merchant-Key': config.merchantKey,
+                Authorization: `Bearer ${config.secretKey}`,
+            },
+            timeout: 30000,
+        });
+    }
+    /**
+     * Create a payment request
+     */
+    async createPayment(request) {
+        if (!this.config || !this.apiClient) {
+            throw new Error('Payment service not initialized. Please configure WIpay credentials.');
         }
         try {
-            // Wipay payment request structure
-            // Note: Actual API structure may vary - consult Wipay documentation
-            const paymentRequest = {
-                merchant_id: this.config.merchantId,
-                amount: data.amount.toString(), // Wipay uses string amounts for JMD
-                currency: 'JMD',
-                order_id: data.orderNumber,
-                order_number: data.orderNumber,
-                description: data.description || `Order ${data.orderNumber}`,
-                email: data.email,
-                customer_name: data.customerName || data.email,
-                phone: data.phone || '',
-                callback_url: `${process.env.FRONTEND_URL || 'http://localhost:8081'}/payment/callback`,
-                cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:8081'}/payment/cancelled`,
-                metadata: {
-                    orderId: data.orderId,
-                    buyerId: data.buyerId,
-                },
-            };
-            // Make API request to Wipay
-            // Note: Adjust endpoint and request format based on Wipay's actual API documentation
-            const response = await axios_1.default.post(`${this.config.baseUrl}/api/v1/transactions`, paymentRequest, {
-                headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'Content-Type': 'application/json',
-                },
+            const response = await this.apiClient.post('/payments', {
+                amount: request.amount,
+                currency: request.currency || 'JMD',
+                order_id: request.orderId,
+                customer_email: request.customerEmail,
+                customer_name: request.customerName,
+                description: request.description || 'Jamaican Marketplace Order',
+                return_url: request.returnUrl,
+                cancel_url: request.cancelUrl,
             });
-            // Wipay typically returns a payment URL to redirect to
-            if (response.data && response.data.payment_url) {
-                return {
-                    paymentUrl: response.data.payment_url,
-                    transactionId: response.data.transaction_id || response.data.reference,
-                    orderId: data.orderId,
-                };
-            }
-            else {
-                throw new Error('Invalid response from Wipay API');
-            }
+            return {
+                transactionId: response.data.transaction_id || response.data.id,
+                paymentUrl: response.data.payment_url || response.data.checkout_url,
+                reference: response.data.reference || response.data.transaction_id,
+                status: 'pending',
+            };
         }
         catch (error) {
-            if (error.response) {
-                throw new Error(`Wipay API error: ${error.response.data?.message || error.message}`);
-            }
-            throw new Error(`Payment initialization failed: ${error.message}`);
+            throw new Error(`WIpay payment creation failed: ${error.response?.data?.message || error.message}`);
         }
     }
     /**
-     * Verify payment transaction
-     * Typically called via webhook or after redirect
+     * Verify a payment transaction
      */
     async verifyPayment(transactionId) {
-        if (!this.config) {
-            throw new Error('Wipay is not configured');
+        if (!this.config || !this.apiClient) {
+            throw new Error('Payment service not initialized. Please configure WIpay credentials.');
         }
         try {
-            // Query Wipay for transaction status
-            const response = await axios_1.default.get(`${this.config.baseUrl}/api/v1/transactions/${transactionId}`, {
-                headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                },
-            });
-            const transaction = response.data;
+            const response = await this.apiClient.get(`/payments/${transactionId}`);
             return {
-                success: transaction.status === 'completed' || transaction.status === 'success',
-                transactionId: transaction.transaction_id || transactionId,
-                amount: parseFloat(transaction.amount || '0'),
-                currency: transaction.currency || 'JMD',
-                status: transaction.status,
-                metadata: transaction.metadata,
+                transactionId: response.data.transaction_id || response.data.id,
+                reference: response.data.reference || response.data.transaction_id,
+                status: response.data.status === 'completed' ? 'success' : 'failed',
+                amount: response.data.amount,
+                currency: response.data.currency || 'JMD',
+                metadata: response.data,
             };
         }
         catch (error) {
-            if (error.response) {
-                throw new Error(`Wipay API error: ${error.response.data?.message || error.message}`);
-            }
-            throw new Error(`Payment verification failed: ${error.message}`);
+            throw new Error(`WIpay payment verification failed: ${error.response?.data?.message || error.message}`);
         }
     }
     /**
-     * Handle Wipay webhook/callback
-     * Wipay will POST to this endpoint when payment status changes
+     * Verify webhook signature
      */
-    async handleWebhook(payload, signature) {
+    verifyWebhookSignature(data, signature) {
         if (!this.config) {
-            throw new Error('Wipay is not configured');
+            return false;
         }
-        try {
-            // Verify webhook signature if Wipay provides one
-            // Adjust based on Wipay's webhook signature verification method
-            // Extract transaction details from webhook payload
-            const transactionId = payload.transaction_id || payload.reference || payload.id;
-            const status = payload.status || payload.payment_status || payload.paymentStatus;
-            if (!transactionId) {
-                throw new Error('Missing transaction ID in webhook payload');
-            }
-            // Return transaction details for route handler to process
-            return {
-                transactionId,
-                status,
-                amount: parseFloat(payload.amount || '0'),
-                currency: payload.currency || 'JMD',
-                metadata: payload.metadata || payload.custom_data || payload,
-            };
-        }
-        catch (error) {
-            throw new Error(`Webhook processing failed: ${error.message}`);
-        }
-    }
-    /**
-     * Get merchant/public key for frontend (if needed)
-     */
-    getMerchantId() {
-        return this.config?.merchantId || '';
+        // WIpay webhook signature verification
+        // Implementation depends on WIpay's webhook signature method
+        // This is a placeholder - update based on WIpay documentation
+        const crypto = require('crypto');
+        const expectedSignature = crypto
+            .createHmac('sha256', this.config.secretKey)
+            .update(JSON.stringify(data))
+            .digest('hex');
+        return expectedSignature === signature;
     }
 }
-exports.default = new PaymentService();
+exports.paymentService = new PaymentService();
 //# sourceMappingURL=payment.service.js.map

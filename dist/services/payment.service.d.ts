@@ -1,49 +1,54 @@
-export interface InitializePaymentData {
-    email: string;
-    amount: number;
-    orderNumber: string;
-    orderId: string;
-    buyerId: string;
-    description?: string;
-    customerName?: string;
-    phone?: string;
+export interface WIpayConfig {
+    merchantId: string;
+    merchantKey: string;
+    secretKey: string;
+    publicKey: string;
+    environment: 'sandbox' | 'production';
 }
-export interface PaymentResponse {
-    paymentUrl: string;
-    transactionId: string;
-    orderId?: string;
-}
-export interface VerifyPaymentResponse {
-    success: boolean;
-    transactionId: string;
+export interface WIpayPaymentRequest {
     amount: number;
     currency: string;
-    status: string;
-    metadata?: any;
+    orderId: string;
+    customerEmail: string;
+    customerName?: string;
+    description?: string;
+    returnUrl?: string;
+    cancelUrl?: string;
+}
+export interface WIpayPaymentResponse {
+    transactionId: string;
+    paymentUrl: string;
+    reference: string;
+    status: 'pending' | 'success' | 'failed';
+}
+export interface WIpayWebhookData {
+    transactionId: string;
+    reference: string;
+    status: 'success' | 'failed';
+    amount: number;
+    currency: string;
+    metadata?: Record<string, any>;
 }
 declare class PaymentService {
     private config;
-    constructor();
+    private apiClient;
     /**
-     * Initialize payment with Wipay
-     * Wipay typically uses a redirect-based payment flow
+     * Initialize WIpay configuration
      */
-    initializePayment(data: InitializePaymentData): Promise<PaymentResponse>;
+    initialize(config: WIpayConfig): void;
     /**
-     * Verify payment transaction
-     * Typically called via webhook or after redirect
+     * Create a payment request
      */
-    verifyPayment(transactionId: string): Promise<VerifyPaymentResponse>;
+    createPayment(request: WIpayPaymentRequest): Promise<WIpayPaymentResponse>;
     /**
-     * Handle Wipay webhook/callback
-     * Wipay will POST to this endpoint when payment status changes
+     * Verify a payment transaction
      */
-    handleWebhook(payload: any, signature?: string): Promise<any>;
+    verifyPayment(transactionId: string): Promise<WIpayWebhookData>;
     /**
-     * Get merchant/public key for frontend (if needed)
+     * Verify webhook signature
      */
-    getMerchantId(): string;
+    verifyWebhookSignature(data: any, signature: string): boolean;
 }
-declare const _default: PaymentService;
-export default _default;
+export declare const paymentService: PaymentService;
+export {};
 //# sourceMappingURL=payment.service.d.ts.map

@@ -40,135 +40,114 @@ const OrderItemSchema = new mongoose_1.Schema({
         ref: 'Product',
         required: true,
     },
-    productTitle: {
-        type: String,
-        required: true,
-    },
-    productImage: String,
     quantity: {
         type: Number,
         required: true,
-        min: [1, 'Quantity must be at least 1'],
+        min: 1,
     },
     price: {
         type: Number,
         required: true,
-        min: [0, 'Price must be positive'],
+        min: 0,
     },
-    unit: {
+    title: {
         type: String,
         required: true,
     },
-}, { _id: false });
+});
 const ShippingAddressSchema = new mongoose_1.Schema({
     street: { type: String, required: true },
     city: { type: String, required: true },
     parish: { type: String, required: true },
     postalCode: { type: String, required: true },
-    contactName: String,
-    contactPhone: String,
-}, { _id: false });
+});
 const OrderSchema = new mongoose_1.Schema({
     orderNumber: {
         type: String,
         required: true,
         unique: true,
-        index: true,
     },
     buyerId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
-        index: true,
     },
     sellerId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
-        index: true,
     },
     items: {
         type: [OrderItemSchema],
-        required: true,
-        validate: {
-            validator: (items) => items.length > 0,
-            message: 'Order must have at least one item',
-        },
-    },
-    shippingAddress: {
-        type: ShippingAddressSchema,
         required: true,
     },
     subtotal: {
         type: Number,
         required: true,
-        min: [0, 'Subtotal must be positive'],
+        min: 0,
     },
     shippingFee: {
         type: Number,
         required: true,
+        min: 0,
         default: 0,
-        min: [0, 'Shipping fee cannot be negative'],
     },
-    tax: {
-        type: Number,
-        default: 0,
-        min: [0, 'Tax cannot be negative'],
-    },
-    total: {
+    totalAmount: {
         type: Number,
         required: true,
-        min: [0, 'Total must be positive'],
+        min: 0,
     },
-    currency: {
+    status: {
         type: String,
-        default: 'JMD',
-        enum: ['JMD'],
-    },
-    paymentMethod: {
-        type: String,
-        required: true,
-        enum: ['card', 'bank_transfer', 'cash_on_delivery'],
+        enum: ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'],
+        default: 'pending',
     },
     paymentStatus: {
         type: String,
-        required: true,
-        enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled'],
+        enum: ['pending', 'paid', 'failed', 'refunded'],
         default: 'pending',
-        index: true,
     },
-    orderStatus: {
+    paymentMethod: {
         type: String,
+        enum: ['card', 'bank_transfer'],
         required: true,
-        enum: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'],
-        default: 'pending',
-        index: true,
     },
-    paymentReference: String,
-    paymentTransactionId: String,
-    notes: String,
-    estimatedDeliveryDate: Date,
-    deliveredAt: Date,
-    cancelledAt: Date,
-    cancellationReason: String,
+    paymentReference: {
+        type: String,
+    },
+    paymentGateway: {
+        type: String,
+        enum: ['wipay', 'bank_transfer'],
+        default: 'wipay',
+    },
+    shippingAddress: {
+        type: ShippingAddressSchema,
+        required: true,
+    },
+    deliveryOption: {
+        type: String,
+        enum: ['delivery', 'pickup'],
+        default: 'delivery',
+    },
+    notes: {
+        type: String,
+    },
 }, {
     timestamps: true,
 });
-// Indexes for efficient queries
-OrderSchema.index({ buyerId: 1, createdAt: -1 });
-OrderSchema.index({ sellerId: 1, createdAt: -1 });
-OrderSchema.index({ orderNumber: 1 });
-OrderSchema.index({ paymentStatus: 1, orderStatus: 1 });
-OrderSchema.index({ createdAt: -1 });
 // Generate unique order number before saving
 OrderSchema.pre('save', async function (next) {
-    if (this.isNew && !this.orderNumber) {
-        const count = await mongoose_1.default.model('Order').countDocuments();
+    if (!this.orderNumber) {
         const year = new Date().getFullYear();
-        const orderNum = String(count + 1).padStart(6, '0');
-        this.orderNumber = `ORD-${year}-${orderNum}`;
+        const count = await mongoose_1.default.model('Order').countDocuments({});
+        this.orderNumber = `ORD-${year}-${String(count + 1).padStart(6, '0')}`;
     }
     next();
 });
+// Indexes
+OrderSchema.index({ buyerId: 1 });
+OrderSchema.index({ sellerId: 1 });
+OrderSchema.index({ orderNumber: 1 }, { unique: true });
+OrderSchema.index({ paymentReference: 1 });
+OrderSchema.index({ createdAt: -1 });
 exports.default = mongoose_1.default.model('Order', OrderSchema);
 //# sourceMappingURL=Order.model.js.map

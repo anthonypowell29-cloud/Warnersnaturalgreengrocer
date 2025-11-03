@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.protect = exports.authorize = exports.authenticate = void 0;
+exports.authorize = exports.authenticate = void 0;
 const jwt_util_1 = require("../utils/jwt.util");
 const authenticate = (req, res, next) => {
     try {
@@ -57,6 +57,4 @@ const authorize = (...roles) => {
     };
 };
 exports.authorize = authorize;
-// Alias for authenticate (commonly used name)
-exports.protect = exports.authenticate;
 //# sourceMappingURL=auth.middleware.js.map

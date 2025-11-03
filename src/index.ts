@@ -13,6 +13,9 @@ dotenv.config();
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import productRoutes from './routes/product.routes';
+import cartRoutes from './routes/cart.routes';
+import orderRoutes from './routes/order.routes';
+import paymentRoutes from './routes/payment.routes';
 
 const app = express();
 
@@ -34,10 +37,35 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'API is running' });
 });
 
+// Initialize payment service
+import { paymentService } from './services/payment.service';
+
+// Initialize WIpay payment service
+try {
+  if (process.env.WIPAY_MERCHANT_ID) {
+    paymentService.initialize({
+      merchantId: process.env.WIPAY_MERCHANT_ID,
+      merchantKey: process.env.WIPAY_MERCHANT_KEY || '',
+      secretKey: process.env.WIPAY_SECRET_KEY || '',
+      publicKey: process.env.WIPAY_PUBLIC_KEY || '',
+      environment: (process.env.WIPAY_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox',
+    });
+    console.log('✅ WIpay payment service initialized');
+  } else {
+    console.warn('⚠️  WIpay credentials not configured. Payment features will not work.');
+    console.warn('   Set WIPAY_MERCHANT_ID, WIPAY_MERCHANT_KEY, WIPAY_SECRET_KEY, and WIPAY_PUBLIC_KEY in .env');
+  }
+} catch (error: any) {
+  console.error('Failed to initialize payment service:', error.message);
+}
+
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/cart', cartRoutes);
+app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/payments', paymentRoutes);
 
 // 404 handler
 app.use((req, res) => {

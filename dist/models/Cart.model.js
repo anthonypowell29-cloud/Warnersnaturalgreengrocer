@@ -43,25 +43,45 @@ const CartItemSchema = new mongoose_1.Schema({
     quantity: {
         type: Number,
         required: true,
-        min: [1, 'Quantity must be at least 1'],
+        min: 1,
     },
-}, { _id: false });
+    price: {
+        type: Number,
+        required: true,
+        min: 0,
+    },
+});
 const CartSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
         unique: true,
-        index: true,
     },
     items: {
         type: [CartItemSchema],
         default: [],
     },
+    subtotal: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
+    itemCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
 }, {
-    timestamps: { createdAt: false, updatedAt: true },
+    timestamps: true,
 });
-// Index for faster lookups
-CartSchema.index({ userId: 1 });
+// Calculate subtotal and itemCount before saving
+CartSchema.pre('save', function (next) {
+    this.subtotal = this.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    this.itemCount = this.items.reduce((sum, item) => sum + item.quantity, 0);
+    next();
+});
+// Indexes
+CartSchema.index({ userId: 1 }, { unique: true });
 exports.default = mongoose_1.default.model('Cart', CartSchema);
 //# sourceMappingURL=Cart.model.js.map

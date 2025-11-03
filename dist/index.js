@@ -26,8 +26,6 @@ const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
-// Stripe webhook must use raw body parser
-// Register this route with raw middleware in payment routes
 // Logging
 if (process.env.NODE_ENV === 'development') {
     app.use((0, morgan_1.default)('dev'));
@@ -36,16 +34,35 @@ if (process.env.NODE_ENV === 'development') {
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'API is running' });
 });
+// Initialize payment service
+const payment_service_1 = require("./services/payment.service");
+// Initialize WIpay payment service
+try {
+    if (process.env.WIPAY_MERCHANT_ID) {
+        payment_service_1.paymentService.initialize({
+            merchantId: process.env.WIPAY_MERCHANT_ID,
+            merchantKey: process.env.WIPAY_MERCHANT_KEY || '',
+            secretKey: process.env.WIPAY_SECRET_KEY || '',
+            publicKey: process.env.WIPAY_PUBLIC_KEY || '',
+            environment: process.env.WIPAY_ENVIRONMENT || 'sandbox',
+        });
+        console.log('✅ WIpay payment service initialized');
+    }
+    else {
+        console.warn('⚠️  WIpay credentials not configured. Payment features will not work.');
+        console.warn('   Set WIPAY_MERCHANT_ID, WIPAY_MERCHANT_KEY, WIPAY_SECRET_KEY, and WIPAY_PUBLIC_KEY in .env');
+    }
+}
+catch (error) {
+    console.error('Failed to initialize payment service:', error.message);
+}
 // API Routes
 app.use('/api/v1/auth', auth_routes_1.default);
 app.use('/api/v1/users', user_routes_1.default);
 app.use('/api/v1/products', product_routes_1.default);
 app.use('/api/v1/cart', cart_routes_1.default);
 app.use('/api/v1/orders', order_routes_1.default);
-// Payment webhook uses raw body parser
-const payment_routes_2 = require("./routes/payment.routes");
-app.use('/api/v1/payment', payment_routes_2.webhookRouter);
-app.use('/api/v1/payment', payment_routes_1.default);
+app.use('/api/v1/payments', payment_routes_1.default);
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({
