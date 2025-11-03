@@ -17,6 +17,16 @@ export interface IProduct extends Document {
   seasonal: boolean;
   available: boolean;
   isApproved: boolean; // For admin moderation
+  // Rating fields (calculated from reviews)
+  averageRating?: number; // 1-5, calculated average
+  totalReviews?: number; // Total number of reviews
+  ratingDistribution?: {
+    5: number;
+    4: number;
+    3: number;
+    2: number;
+    1: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -103,6 +113,29 @@ const ProductSchema = new Schema<IProduct>(
       type: Boolean,
       default: false, // Products need admin approval
       index: true,
+    },
+    // Rating fields (calculated from reviews)
+    averageRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    totalReviews: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    ratingDistribution: {
+      type: {
+        '5': { type: Number, default: 0 },
+        '4': { type: Number, default: 0 },
+        '3': { type: Number, default: 0 },
+        '2': { type: Number, default: 0 },
+        '1': { type: Number, default: 0 },
+      },
+      default: { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 },
+      _id: false,
     },
   },
   {
