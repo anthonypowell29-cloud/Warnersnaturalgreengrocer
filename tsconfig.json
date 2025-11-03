@@ -20,7 +20,7 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/vite-env.d.ts"],
   "exclude": [
     "node_modules",
     "dist",
@@ -31,7 +31,6 @@
     "src/main.tsx",
     "src/App.tsx",
     "src/index.tsx",
-    "src/vite-env.d.ts",
     "src/hooks/**/*"
   ]
 }
