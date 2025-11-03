@@ -11,6 +11,7 @@ import {
 } from '../controllers/product.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
+import { cacheMiddleware } from '../middleware/cache.middleware';
 
 const router = express.Router();
 
@@ -26,10 +27,10 @@ const productValidation = [
   body('longitude').isFloat().withMessage('Valid longitude is required'),
 ];
 
-// Public routes
-router.get('/', getProducts);
-router.get('/search', searchProducts);
-router.get('/:id', getProduct);
+// Public routes (with caching for better performance)
+router.get('/', cacheMiddleware({ ttl: 120 }), getProducts); // 2 min cache
+router.get('/search', cacheMiddleware({ ttl: 60 }), searchProducts); // 1 min cache
+router.get('/:id', cacheMiddleware({ ttl: 300 }), getProduct); // 5 min cache
 
 // Protected routes
 router.post(

@@ -48,12 +48,14 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Execute query
+    // Execute query with optimized fields selection and lean() for better performance
     const products = await Product.find(query)
-      .populate('sellerId', 'displayName photoURL userType')
+      .populate('sellerId', 'displayName photoURL userType isVerified')
+      .select('title description category subcategory price stock images parish location available averageRating totalReviews createdAt sellerId')
       .sort(sort as string)
       .skip(skip)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean(); // Use lean() for better performance - returns plain JS objects
 
     const total = await Product.countDocuments(query);
 
