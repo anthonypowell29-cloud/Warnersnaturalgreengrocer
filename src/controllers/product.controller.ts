@@ -152,17 +152,10 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       seasonal,
     } = req.body;
 
-    // Validate location
-    if (!latitude || !longitude) {
-      res.status(400).json({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Location (latitude and longitude) is required',
-        },
-      });
-      return;
-    }
+    // Use default location if not provided (Jamaica center, St. Mary parish)
+    const finalLatitude = latitude || 18.1; // Jamaica center latitude
+    const finalLongitude = longitude || -77.3; // Jamaica center longitude
+    const finalParish = parish || 'St. Mary';
 
     // Handle image uploads
     const images: string[] = [];
@@ -188,9 +181,9 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       images,
       location: {
         type: 'Point',
-        coordinates: [Number(longitude), Number(latitude)],
+        coordinates: [Number(finalLongitude), Number(finalLatitude)],
       },
-      parish,
+      parish: finalParish,
       seasonal: seasonal === 'true' || seasonal === true,
       available: Number(stock) > 0,
       isApproved: false, // Requires admin approval
