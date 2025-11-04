@@ -369,6 +369,10 @@ export const deleteProduct = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
+    // Delete all reviews associated with this product
+    await Review.deleteMany({ productId: productId });
+
+    // Delete the product
     await Product.findByIdAndDelete(productId);
 
     res.status(200).json({

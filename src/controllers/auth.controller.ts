@@ -40,12 +40,16 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     isVerified,
   });
 
-  // Generate token
-  const token = generateToken({
-    userId: String(user._id),
-    email: user.email,
-    userType: user.userType,
-  });
+  // Only generate token for verified users (buyers are automatically verified)
+  // Farmers need to wait for admin verification before they can log in
+  let token = null;
+  if (isVerified) {
+    token = generateToken({
+      userId: String(user._id),
+      email: user.email,
+      userType: user.userType,
+    });
+  }
 
   res.status(201).json({
     success: true,
@@ -59,11 +63,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         phoneNumber: user.phoneNumber,
         isVerified: user.isVerified,
       },
-      token,
+      token: token || undefined, // Only include token if user is verified
     },
     message: userType === 'buyer' 
       ? 'User registered successfully' 
-      : 'User registered successfully. Your account is pending verification.',
+      : 'User registered successfully. Your account is pending verification. Please wait for admin approval before logging in.',
   });
 };
 
@@ -100,6 +104,30 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  // Check if farmer is verified (buyers are automatically verified)
+  if (user.userType === 'farmer' && !user.isVerified) {
+    res.status(403).json({
+      success: false,
+      error: {
+        code: 'ACCOUNT_PENDING',
+        message: 'Your account is pending verification. Please wait for admin approval before logging in.',
+      },
+    });
+    return;
+  }
+
+  // Check if user is banned
+  if (user.isBanned) {
+    res.status(403).json({
+      success: false,
+      error: {
+        code: 'ACCOUNT_BANNED',
+        message: 'Your account has been banned. Please contact support.',
+      },
+    });
+    return;
+  }
+
   // Generate token
   const token = generateToken({
     userId: String(user._id),
@@ -117,6 +145,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         userType: user.userType,
         photoURL: user.photoURL,
         phoneNumber: user.phoneNumber,
+        isVerified: user.isVerified,
       },
       token,
     },
