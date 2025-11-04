@@ -349,6 +349,43 @@ export const approveProduct = async (req: AuthenticatedRequest, res: Response): 
   }
 };
 
+// @desc    Delete product (Admin only)
+// @route   DELETE /api/v1/admin/products/:id
+// @access  Private (Admin only)
+export const deleteProduct = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const productId = req.params.id;
+
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Product not found',
+        },
+      });
+      return;
+    }
+
+    await Product.findByIdAndDelete(productId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Product deleted successfully',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error.message || 'Failed to delete product',
+      },
+    });
+  }
+};
+
 // @desc    Get all reviews (with filters)
 // @route   GET /api/v1/admin/reviews
 // @access  Private (Admin only)

@@ -7,6 +7,7 @@ import {
   updateUser,
   getAllProducts,
   approveProduct,
+  deleteProduct,
   getAllReviews,
   moderateReview,
   getAllTransactions,
@@ -29,6 +30,7 @@ router.route('/users/:id').get(getUser).put(updateUser);
 
 // Products
 router.route('/products').get(getAllProducts);
+router.delete('/products/:id', deleteProduct);
 router.put('/products/:id/approve', approveProduct);
 
 // Reviews

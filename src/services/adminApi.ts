@@ -141,6 +141,13 @@ export const adminApi = {
     return response.data;
   },
 
+  deleteProduct: async (id: string) => {
+    const response = await request(`/admin/products/${id}`, {
+      method: 'DELETE',
+    });
+    return response.data;
+  },
+
   // Reviews
   getReviews: async (params?: { page?: number; limit?: number; search?: string; isModerated?: boolean; productId?: string; userId?: string }) => {
     const queryParams = new URLSearchParams();
