@@ -40,7 +40,12 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     }
 
     if (search) {
-      query.$text = { $search: search as string };
+      // Use regex for partial matching instead of full-text search
+      const searchRegex = new RegExp(search as string, 'i'); // 'i' for case-insensitive
+      query.$or = [
+        { title: searchRegex },
+        { description: searchRegex },
+      ];
     }
 
     // Pagination
@@ -408,7 +413,12 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
     };
 
     if (q) {
-      query.$text = { $search: q as string };
+      // Use regex for partial matching instead of full-text search
+      const searchRegex = new RegExp(q as string, 'i'); // 'i' for case-insensitive
+      query.$or = [
+        { title: searchRegex },
+        { description: searchRegex },
+      ];
     }
 
     if (category) {
@@ -428,7 +438,7 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
     const products = await Product.find(query)
       .populate('sellerId', 'displayName photoURL userType')
       .limit(50)
-      .sort(q ? { score: { $meta: 'textScore' } } : '-createdAt');
+      .sort('-createdAt');
 
     res.status(200).json({
       success: true,
