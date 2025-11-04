@@ -18,9 +18,23 @@ interface AuthenticatedRequest extends Request {
 export const createOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || '';
-    const { shippingAddressId, paymentMethod, deliveryOption, notes, shippingFee } = req.body;
+    const { shippingAddress, paymentMethod, deliveryOption, notes, shippingFee } = req.body;
 
-    // Get user to fetch shipping address
+    // Validate shipping address if delivery option is selected
+    if (deliveryOption !== 'pickup') {
+      if (!shippingAddress || !shippingAddress.street || !shippingAddress.city || !shippingAddress.parish || !shippingAddress.postalCode) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_ADDRESS',
+            message: 'Shipping address is required for delivery',
+          },
+        });
+        return;
+      }
+    }
+
+    // Get user for payment customer info
     const user = await User.findById(userId);
     if (!user) {
       res.status(404).json({
@@ -28,22 +42,6 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
         error: {
           code: 'USER_NOT_FOUND',
           message: 'User not found',
-        },
-      });
-      return;
-    }
-
-    // Find shipping address
-    const shippingAddress = user.addresses.find(
-      (addr: any) => addr._id?.toString() === shippingAddressId
-    );
-
-    if (!shippingAddress) {
-      res.status(404).json({
-        success: false,
-        error: {
-          code: 'ADDRESS_NOT_FOUND',
-          message: 'Shipping address not found',
         },
       });
       return;
@@ -122,7 +120,12 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
       totalAmount,
       paymentMethod,
       paymentGateway: paymentMethod === 'card' ? 'wipay' : 'bank_transfer',
-      shippingAddress: {
+      shippingAddress: deliveryOption === 'pickup' ? {
+        street: 'Pickup',
+        city: 'N/A',
+        parish: 'N/A',
+        postalCode: 'N/A',
+      } : {
         street: shippingAddress.street,
         city: shippingAddress.city,
         parish: shippingAddress.parish,
