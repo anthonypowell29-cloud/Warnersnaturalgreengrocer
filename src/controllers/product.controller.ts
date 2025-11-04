@@ -22,7 +22,7 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     // Build query
     const query: any = {
       available: available !== 'false',
-      isApproved: true, // Only show approved products
+      // Products are now displayed immediately without approval
     };
 
     if (category) {
@@ -186,7 +186,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       parish: finalParish,
       seasonal: seasonal === 'true' || seasonal === true,
       available: Number(stock) > 0,
-      isApproved: false, // Requires admin approval
+      isApproved: true, // Products are immediately visible
     });
 
     // Convert to plain object to avoid Mongoose serialization issues
@@ -195,7 +195,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
     res.status(201).json({
       success: true,
       data: productData,
-      message: 'Product created successfully. Pending approval.',
+      message: 'Product created successfully.',
     });
   } catch (error: any) {
     res.status(500).json({

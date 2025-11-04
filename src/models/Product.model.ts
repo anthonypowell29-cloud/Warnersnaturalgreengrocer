@@ -111,7 +111,7 @@ const ProductSchema = new Schema<IProduct>(
     },
     isApproved: {
       type: Boolean,
-      default: false, // Products need admin approval
+      default: true, // Products are immediately visible
       index: true,
     },
     // Rating fields (calculated from reviews)
