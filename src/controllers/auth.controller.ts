@@ -28,12 +28,16 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   const hashedPassword = await bcrypt.hash(password, salt);
 
   // Create user
+  // Only farmers need verification, buyers are automatically verified
+  const isVerified = userType === 'buyer';
+  
   const user = await User.create({
     email,
     password: hashedPassword,
     displayName,
     userType,
     phoneNumber,
+    isVerified,
   });
 
   // Generate token
@@ -53,10 +57,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         userType: user.userType,
         photoURL: user.photoURL,
         phoneNumber: user.phoneNumber,
+        isVerified: user.isVerified,
       },
       token,
     },
-    message: 'User registered successfully',
+    message: userType === 'buyer' 
+      ? 'User registered successfully' 
+      : 'User registered successfully. Your account is pending verification.',
   });
 };
 
