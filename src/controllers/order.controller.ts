@@ -18,7 +18,7 @@ interface AuthenticatedRequest extends Request {
 export const createOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || '';
-    const { shippingAddress, paymentMethod, deliveryOption, notes, shippingFee } = req.body;
+    const { shippingAddress, paymentMethod, deliveryOption, contactPhoneNumber, notes, shippingFee } = req.body;
 
     // Validate shipping address if delivery option is selected
     if (deliveryOption !== 'pickup') {
@@ -120,6 +120,7 @@ export const createOrder = async (req: AuthenticatedRequest, res: Response): Pro
       totalAmount,
       paymentMethod,
       paymentGateway: paymentMethod === 'card' ? 'wipay' : 'bank_transfer',
+      contactPhoneNumber: contactPhoneNumber || user.phoneNumber || undefined,
       shippingAddress: deliveryOption === 'pickup' ? {
         street: 'Pickup',
         city: 'N/A',

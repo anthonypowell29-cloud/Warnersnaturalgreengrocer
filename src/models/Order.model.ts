@@ -33,6 +33,7 @@ export interface IOrder extends Document {
   paymentGateway: 'wipay' | 'bank_transfer';
   shippingAddress: IShippingAddress;
   deliveryOption: 'delivery' | 'pickup';
+  contactPhoneNumber?: string;
   notes?: string;
   // Status tracking
   statusHistory?: Array<{
@@ -144,6 +145,10 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       enum: ['delivery', 'pickup'],
       default: 'delivery',
+    },
+    contactPhoneNumber: {
+      type: String,
+      trim: true,
     },
     notes: {
       type: String,
