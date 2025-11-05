@@ -743,3 +743,55 @@ export const getPayouts = async (req: AuthenticatedRequest, res: Response): Prom
   }
 };
 
+// @desc    Fix existing reviews - set isModerated to true and recalculate product ratings
+// @route   POST /api/v1/admin/reviews/fix
+// @access  Private (Admin only)
+export const fixReviews = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    // Update all existing reviews to isModerated: true
+    const updateResult = await (Review as unknown as mongoose.Model<IReview>).updateMany(
+      { isModerated: false },
+      { $set: { isModerated: true } }
+    );
+
+    // Get all unique product IDs that have reviews
+    const productsWithReviews = await (Review as unknown as mongoose.Model<IReview>).distinct('productId');
+
+    // Recalculate ratings for all products
+    const ReviewModel = Review as any;
+    let updatedCount = 0;
+
+    for (const productId of productsWithReviews) {
+      try {
+        const stats = await ReviewModel.calculateAverageRating(productId);
+        await Product.findByIdAndUpdate(productId, {
+          averageRating: stats.averageRating,
+          totalReviews: stats.totalReviews,
+          ratingDistribution: stats.distribution,
+        });
+        updatedCount++;
+      } catch (error: any) {
+        console.error(`Error updating product ${productId}:`, error.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Reviews fixed successfully',
+      data: {
+        reviewsUpdated: updateResult.modifiedCount,
+        productsUpdated: updatedCount,
+        totalProducts: productsWithReviews.length,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error.message || 'Failed to fix reviews',
+      },
+    });
+  }
+};
+

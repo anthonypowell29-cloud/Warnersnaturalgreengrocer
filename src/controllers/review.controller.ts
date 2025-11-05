@@ -36,10 +36,16 @@ export const getProductReviews = async (req: Request, res: Response): Promise<vo
 
     const total = await (Review as unknown as mongoose.Model<IReview>).countDocuments(query);
 
+    // Calculate average rating and total reviews for the product
+    const ReviewModel = Review as any;
+    const stats = await ReviewModel.calculateAverageRating(productId as any);
+
     res.status(200).json({
       success: true,
       data: {
         reviews,
+        averageRating: stats.averageRating,
+        totalReviews: stats.totalReviews,
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -175,6 +181,7 @@ export const createReview = async (req: AuthenticatedRequest, res: Response): Pr
       comment: comment.trim(),
       images: imageUrls,
       isVerifiedPurchase,
+      isModerated: true, // Auto-approve reviews by default
     });
 
     // Calculate and update product average rating

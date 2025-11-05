@@ -10,6 +10,7 @@ import {
   deleteProduct,
   getAllReviews,
   moderateReview,
+  fixReviews,
   getAllTransactions,
   getAllOrders,
   getPayouts,
@@ -36,6 +37,7 @@ router.put('/products/:id/approve', approveProduct);
 // Reviews
 router.route('/reviews').get(getAllReviews);
 router.put('/reviews/:id/moderate', moderateReview);
+router.post('/reviews/fix', fixReviews);
 
 // Transactions
 router.route('/transactions').get(getAllTransactions);
