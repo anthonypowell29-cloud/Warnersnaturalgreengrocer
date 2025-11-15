@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { adminApi } from "@/services/adminApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Package, Star, DollarSign, TrendingUp, ShoppingCart } from "lucide-react";
-import StMaryMap from "@/components/StMaryMap";
 import jamaicaPattern from "@/assets/jamaica-produce-pattern.jpg";
 import { useNavigate } from "react-router-dom";
 
@@ -161,11 +160,6 @@ const Dashboard = () => {
             </Card>
           );
         })}
-      </div>
-
-      {/* St. Mary Parish Map */}
-      <div className="relative z-10">
-        <StMaryMap />
       </div>
 
       <Card className="glass border-white/20 relative z-10">

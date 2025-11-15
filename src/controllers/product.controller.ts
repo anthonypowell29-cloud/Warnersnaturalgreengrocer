@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Product, { IProduct } from '../models/Product.model';
 import { uploadImage } from '../services/image.service';
+import Review, { IReviewModel } from '../models/Review.model';
 
 // @desc    Get all products
 // @route   GET /api/v1/products
@@ -62,12 +63,58 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
       .limit(limitNum)
       .lean(); // Use lean() for better performance - returns plain JS objects
 
+    // Calculate and update ratings for products that might have missing or outdated ratings
+    // Only calculate for products that might have reviews (optimization)
+    const productsWithRatings = await Promise.all(
+      products.map(async (product: any) => {
+        // If ratings are already present and look valid, use them
+        if (
+          product.averageRating !== undefined &&
+          product.averageRating !== null &&
+          product.totalReviews !== undefined &&
+          product.totalReviews !== null &&
+          product.totalReviews > 0
+        ) {
+          return {
+            ...product,
+            averageRating: product.averageRating,
+            totalReviews: product.totalReviews,
+          };
+        }
+        
+        // Calculate ratings for products with missing or zero ratings
+        const ReviewModel = Review as any;
+        const stats = await ReviewModel.calculateAverageRating(product._id);
+        
+        // Update product in database if it has reviews
+        if (stats.totalReviews > 0 || 
+            product.averageRating === undefined || 
+            product.averageRating === null ||
+            product.totalReviews === undefined || 
+            product.totalReviews === null) {
+          // Update in database for future queries (fire and forget)
+          Product.findByIdAndUpdate(product._id, {
+            averageRating: stats.averageRating,
+            totalReviews: stats.totalReviews,
+            ratingDistribution: stats.distribution,
+          }, { new: false }).catch(err => console.error('Error updating product ratings:', err));
+        }
+        
+        // Return updated values for this response
+        return {
+          ...product,
+          averageRating: stats.averageRating,
+          totalReviews: stats.totalReviews,
+        };
+      })
+    );
+
     const total = await Product.countDocuments(query);
 
     res.status(200).json({
       success: true,
       data: {
-        products,
+        products: productsWithRatings,
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -92,7 +139,7 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
 // @access  Public
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
   try {
-    const product = await Product.findById(req.params.id)
+    let product: any = await Product.findById(req.params.id)
       .populate(
         'sellerId',
         'displayName photoURL userType isVerified'
@@ -108,6 +155,41 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
         },
       });
       return;
+    }
+
+    // Calculate and update ratings if missing or outdated
+    const ReviewModel = Review as any;
+    const stats = await ReviewModel.calculateAverageRating(product._id);
+    
+    // Update product if ratings are missing or different
+    if (
+      product.averageRating === undefined ||
+      product.averageRating === null ||
+      product.totalReviews === undefined ||
+      product.totalReviews === null ||
+      Math.abs((product.averageRating || 0) - stats.averageRating) > 0.01 ||
+      (product.totalReviews || 0) !== stats.totalReviews
+    ) {
+      // Update in database for future queries
+      await Product.findByIdAndUpdate(product._id, {
+        averageRating: stats.averageRating,
+        totalReviews: stats.totalReviews,
+        ratingDistribution: stats.distribution,
+      });
+      
+      // Update the product object for this response
+      product = {
+        ...product,
+        averageRating: stats.averageRating,
+        totalReviews: stats.totalReviews,
+      };
+    } else {
+      // Ensure default values if undefined
+      product = {
+        ...product,
+        averageRating: product.averageRating ?? 0,
+        totalReviews: product.totalReviews ?? 0,
+      };
     }
 
     res.status(200).json({
