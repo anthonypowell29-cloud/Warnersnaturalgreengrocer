@@ -3,13 +3,19 @@
 // Expected format: https://warnersgrocer.store/api/v1 (base URL including /api/v1)
 type ImportMetaEnv = {
   VITE_API_URL?: string;
+  MODE?: string;
   [key: string]: any;
 };
 const env = (import.meta as unknown as { env: ImportMetaEnv }).env;
 
 // Get API base URL from environment variable
-// Clean and normalize the URL
-let apiBaseUrl = env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// Default to production URL if in production mode, otherwise localhost
+const isProduction = env.MODE === 'production' || window.location.hostname !== 'localhost';
+const defaultApiUrl = isProduction 
+  ? 'https://warnersgrocer.store/api/v1' 
+  : 'http://localhost:3000/api/v1';
+
+let apiBaseUrl = env.VITE_API_URL || defaultApiUrl;
 
 // Remove any trailing slashes
 apiBaseUrl = apiBaseUrl.trim().replace(/\/+$/, '');
@@ -17,17 +23,20 @@ apiBaseUrl = apiBaseUrl.trim().replace(/\/+$/, '');
 // Validate: ensure it doesn't contain the variable name itself (common .env mistake)
 if (apiBaseUrl.includes('VITE_API_URL=') || apiBaseUrl.includes('VITE_API_BASE_URL=')) {
   console.error('Invalid API URL detected in environment variable:', apiBaseUrl);
-  apiBaseUrl = 'http://localhost:3000/api/v1';
+  apiBaseUrl = defaultApiUrl;
 }
 
 // Ensure the URL is properly formatted
 if (!apiBaseUrl.startsWith('http://') && !apiBaseUrl.startsWith('https://')) {
   console.error('API URL must start with http:// or https://:', apiBaseUrl);
-  apiBaseUrl = 'http://localhost:3000/api/v1';
+  apiBaseUrl = defaultApiUrl;
 }
 
 const API_BASE_URL = apiBaseUrl;
 console.log('Admin API Base URL:', API_BASE_URL);
+console.log('Environment variable VITE_API_URL:', env.VITE_API_URL || 'NOT SET');
+console.log('Mode:', env.MODE || 'unknown');
+console.log('Hostname:', window.location.hostname);
 
 let authToken: string | null = localStorage.getItem('admin_token') || null;
 
