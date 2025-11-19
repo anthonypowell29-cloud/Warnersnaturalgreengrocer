@@ -1,6 +1,12 @@
 // API service for admin panel to communicate with backend
-// Default to localhost:3000 if VITE_API_URL is not set
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// Reads from VITE_API_BASE_URL environment variable
+type ImportMetaEnv = {
+  VITE_API_BASE_URL?: string;
+  VITE_API_URL?: string;
+  [key: string]: any;
+};
+const env = (import.meta as unknown as { env: ImportMetaEnv }).env;
+const API_BASE_URL = env.VITE_API_BASE_URL || env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 console.log('Admin API Base URL:', API_BASE_URL);
 
