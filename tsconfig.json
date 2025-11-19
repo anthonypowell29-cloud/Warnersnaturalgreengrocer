@@ -31,7 +31,8 @@
     "src/main.tsx",
     "src/App.tsx",
     "src/index.tsx",
-    "src/hooks/**/*"
+    "src/hooks/**/*",
+    "src/integration/supabase/**/*"
   ]
 }
 
