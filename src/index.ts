@@ -27,7 +27,17 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:3000', 'http://127.0.0.1:8080'],
+  origin: [
+    'http://localhost:8080', 
+    'http://localhost:3000', 
+    'http://127.0.0.1:8080',
+    'https://warnersgrocer.store',
+    'http://warnersgrocer.store',
+    'https://www.warnersgrocer.store',
+    'http://www.warnersgrocer.store',
+    'http://38.54.84.119',
+    'https://38.54.84.119'
+  ],
   credentials: true,
 }));
 app.use(express.json());
