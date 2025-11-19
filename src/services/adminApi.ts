@@ -1,13 +1,32 @@
 // API service for admin panel to communicate with backend
-// Reads from VITE_API_BASE_URL environment variable
+// Reads from VITE_API_URL environment variable
+// Expected format: https://warnersgrocer.store/api/v1 (base URL including /api/v1)
 type ImportMetaEnv = {
-  VITE_API_BASE_URL?: string;
   VITE_API_URL?: string;
   [key: string]: any;
 };
 const env = (import.meta as unknown as { env: ImportMetaEnv }).env;
-const API_BASE_URL = env.VITE_API_BASE_URL || env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
+// Get API base URL from environment variable
+// Clean and normalize the URL
+let apiBaseUrl = env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
+// Remove any trailing slashes
+apiBaseUrl = apiBaseUrl.trim().replace(/\/+$/, '');
+
+// Validate: ensure it doesn't contain the variable name itself (common .env mistake)
+if (apiBaseUrl.includes('VITE_API_URL=') || apiBaseUrl.includes('VITE_API_BASE_URL=')) {
+  console.error('Invalid API URL detected in environment variable:', apiBaseUrl);
+  apiBaseUrl = 'http://localhost:3000/api/v1';
+}
+
+// Ensure the URL is properly formatted
+if (!apiBaseUrl.startsWith('http://') && !apiBaseUrl.startsWith('https://')) {
+  console.error('API URL must start with http:// or https://:', apiBaseUrl);
+  apiBaseUrl = 'http://localhost:3000/api/v1';
+}
+
+const API_BASE_URL = apiBaseUrl;
 console.log('Admin API Base URL:', API_BASE_URL);
 
 let authToken: string | null = localStorage.getItem('admin_token') || null;
@@ -23,7 +42,10 @@ export const clearAuthToken = () => {
 };
 
 const request = async (endpoint: string, options: RequestInit = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Ensure endpoint starts with /
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  // Construct URL: base + endpoint (both normalized)
+  const url = `${API_BASE_URL}${normalizedEndpoint}`;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
