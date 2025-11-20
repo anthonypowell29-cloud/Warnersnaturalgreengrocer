@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <!-- Green gradient matching gradient-primary: hsl(142 76% 36%) to hsl(142 76% 55%) -->
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#16a34a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4ade80;stop-opacity:1" />
+    </linearGradient>
+    <!-- Shadow filter for depth -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Circular background with gradient (matching login panel) -->
+  <circle cx="50" cy="50" r="48" fill="url(#greenGradient)" filter="url(#shadow)"/>
+  
+  <!-- White leaf icon matching lucide-react Leaf style -->
+  <g transform="translate(50, 50)" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Main leaf shape -->
+    <path d="M -12 -5 
+             Q -18 -12 -15 -18 
+             Q -12 -24 -6 -22 
+             Q 0 -20 6 -22 
+             Q 12 -24 15 -18 
+             Q 18 -12 12 -5 
+             Q 8 -2 4 -1 
+             Q 0 0 -4 -1 
+             Q -8 -2 -12 -5 Z" 
+         fill="white" 
+         opacity="0.98"/>
+    <!-- Leaf stem -->
+    <line x1="0" y1="0" x2="0" y2="10" stroke-width="3.5"/>
+    <!-- Central vein -->
+    <path d="M 0 -22 Q 0 -12 0 -5" stroke-width="2" opacity="0.7"/>
+    <!-- Side veins -->
+    <path d="M -6 -18 Q -3 -10 0 -6" stroke-width="1.5" opacity="0.6"/>
+    <path d="M 6 -18 Q 3 -10 0 -6" stroke-width="1.5" opacity="0.6"/>
+  </g>
+</svg>
